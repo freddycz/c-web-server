@@ -119,7 +119,7 @@ int main(void) {
 
         if (!fork()) { // this is the child process
             close(sockfd); // child doesn't need the listener
-            char *text = "Zdravi pepa!\n";
+            char *text = "HTTP/1.1 200 OK\nContent-Length: 12\nContent-Type: text/plain; charset=utf-8\n\nHello World!";
             if (send(new_fd, text, strlen(text), 0) == -1)
                 perror("send");
             close(new_fd);
