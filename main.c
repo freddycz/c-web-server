@@ -178,7 +178,7 @@ int main(void) {
 
         if (!fork()) { // this is the child process
             close(sockfd); // child doesn't need the listener
-            char *text = "HTTP/1.1 200 OK\nContent-Length: 122\nContent-Type: text/html; charset=utf-8\n\n";
+            char *text = "HTTP/1.0 200 OK\nContent-Length: 122\nContent-Type: text/html; charset=utf-8\n\n";
             if (send(new_fd, text, strlen(text), 0) == -1)
                 perror("send");
             char *content = "<!DOCTYPE html><html><title>HTML Tutorial</title><body><h1>This is a heading</h1><p>This is a paragraph.</p></body></html>";
