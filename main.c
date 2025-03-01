@@ -3,8 +3,10 @@
 */
 
 #include <asm-generic/socket.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/poll.h>
 #include <time.h>
 #include <unistd.h>
 #include <errno.h>
@@ -16,6 +18,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <poll.h>
 
 #define PORT "3000"  // the port users will be connecting to
 
@@ -72,10 +75,13 @@ int read_request(int fd, char **s, int *size) {
             *s = new_s;
             available += MIN_REQ_SIZE;
         }
-        int got = recv(fd, *s+received, available, 0);
+        int got = recv(fd, *s+received, available, MSG_DONTWAIT);
 
 
         if (got < 0) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+               break; 
+            }
             free(*s);
             return -1; 
         }
@@ -86,7 +92,9 @@ int read_request(int fd, char **s, int *size) {
         received += got;
         *((*s)+received) = '\0';
 
-        if (received >= 4 && strcmp(*s+received-4, "\r\n\r\n")) {
+
+
+        if (received >= 4 && strcmp(*s+received-4, "\r\n\r\n") == 0) {
             break;
         }
     }
@@ -96,7 +104,6 @@ int read_request(int fd, char **s, int *size) {
     if (trimmed_s != NULL) {
         *s = trimmed_s;
     }
-
     return 0;
 }
 
@@ -131,6 +138,57 @@ int parse_request(struct http_request *req,char *req_str, int size) {
     strncpy(req->protocol, protocol, MAX_PROTOCOL_LEN-1);
 
     return 0;
+}
+
+void send_error(int fd, int err) {
+    if (err == 500) {
+        char *interal_err = "HTTP/1.0 500 Internal Server Error";
+        send(fd, interal_err, strlen(interal_err), 0);
+    } else if (err == 501) {
+        char *not_implemented = "HTTP/1.0 501 Not Implemented";
+        send(fd, not_implemented, strlen(not_implemented), 0);
+    } else if (err == 400) {
+        char *bad_req = "HTTP/1.0 400 Bad Request";
+        send(fd, bad_req, strlen(bad_req), 0);
+    }
+}
+
+void handle_request(int fd) {
+    char *req_str;
+    int req_size = MIN_REQ_SIZE;
+
+    int status;
+
+    status = read_request(fd, &req_str, &req_size);
+
+    if (status == -1) {
+        printf("failed to read request\n");
+        send_error(fd, 500);
+        return;
+    }
+
+
+    struct http_request req;
+    status = parse_request(&req, req_str, req_size); 
+    free(req_str);
+
+    if (status == -1) {
+        printf("failed to parse request\n");
+        send_error(fd, 400);
+        return;
+    }
+
+    if (strcmp(req.method, "GET") == 0) {
+        char *text = "HTTP/1.0 200 OK\nContent-Length: 122\nContent-Type: text/html; charset=utf-8\n\n";
+        if (send(fd, text, strlen(text), 0) == -1)
+            perror("send");
+        char *content = "<!DOCTYPE html><html><title>HTML Tutorial</title><body><h1>This is a heading</h1><p>This is a paragraph.</p></body></html>";
+        if (send(fd, content, strlen(content), 0) == -1)
+            perror("send");
+    } else {
+        send_error(fd, 501);
+        printf("Method not supported\n");
+    }
 }
 
 
@@ -213,25 +271,23 @@ int main(void) {
 
         if (!fork()) { // this is the child process
             close(sockfd); // child doesn't need the listener
+            struct pollfd pfds[1]; // More if you want to monitor more
+            pfds[0].fd = new_fd;          // Standard input
+            pfds[0].events = POLLIN; // Tell me when ready to read
             
-            char *req_s;
-            int req_size = MIN_REQ_SIZE;
-            if (read_request(new_fd, &req_s, &req_size) == -1) {
-                printf("Failed to read request\n");
-            } else {
-                struct http_request req;
-                parse_request(&req, req_s, req_size);
+            int num_events = poll(pfds, 1, -1);
+            if (num_events == -1) {
+                printf("failed to poll\n");
+                close(new_fd);
+                exit(0);
             }
-            free(req_s);
-            
-            char *text = "HTTP/1.0 200 OK\nContent-Length: 122\nContent-Type: text/html; charset=utf-8\n\n";
-            if (send(new_fd, text, strlen(text), 0) == -1)
-                perror("send");
-            char *content = "<!DOCTYPE html><html><title>HTML Tutorial</title><body><h1>This is a heading</h1><p>This is a paragraph.</p></body></html>";
-            if (send(new_fd, content, strlen(content), 0) == -1)
-                perror("send");
-            close(new_fd);
+            int pollin_happened = pfds[0].revents & POLLIN;
 
+            if (pollin_happened) {
+                handle_request(new_fd);
+            }
+            
+            close(new_fd);
             exit(0);
         }
         close(new_fd);  // parent doesn't need this
