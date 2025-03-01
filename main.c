@@ -2,8 +2,10 @@
 ** server.c -- a stream socket server demo
 */
 
+#include <asm-generic/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -15,12 +17,12 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#define PORT "3490"  // the port users will be connecting to
+#define PORT "3000"  // the port users will be connecting to
 
 #define BACKLOG 10   // how many pending connections queue will hold
+#define MIN_REQ_SIZE 500 //in bytes 
 
-void sigchld_handler(int s)
-{
+void sigchld_handler(int s) {
     // waitpid() might overwrite errno, so we save and restore it:
     int saved_errno = errno;
 
@@ -31,14 +33,63 @@ void sigchld_handler(int s)
 
 
 // get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
+void *get_in_addr(struct sockaddr *sa) {
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
+
+int read_request(int fd, char **s, int *size) {
+    int received = 0;
+    *size = MIN_REQ_SIZE;
+    *s = malloc(sizeof(char) * *size);
+    if (*s == NULL) {
+        return -1;
+    }
+    *s[0] = '\0';
+    
+    while(1) {
+        int available = *size - received;
+        if (available <= 0) {
+            *size += MIN_REQ_SIZE;
+            char *new_s = realloc(*s, *size);
+            if (new_s == NULL) {
+                free(*s);
+                return -1;
+            }
+            *s = new_s;
+            available += MIN_REQ_SIZE;
+        }
+        int got = recv(fd, *s+received, available, 0);
+
+
+        if (got < 0) {
+            free(*s);
+            return -1; 
+        }
+        if (got == 0) {
+            break;
+        }
+
+        received += got;
+        *((*s)+received) = '\0';
+
+        if (received >= 4 && strcmp(*s+received-4, "\r\n\r\n")) {
+            break;
+        }
+    }
+
+    *size = received + 1;
+    char *trimmed_s = realloc(*s, *size);
+    if (trimmed_s != NULL) {
+        *s = trimmed_s;
+    }
+
+    return 0;
+}
+
 
 int main(void) {
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
@@ -116,6 +167,14 @@ int main(void) {
         inet_ntop(their_addr.ss_family,get_in_addr((struct sockaddr *)&their_addr),
             s, sizeof s);
         printf("server: got connection from %s\n", s);
+        char *req;
+        int req_size = MIN_REQ_SIZE;
+        if (read_request(new_fd, &req, &req_size) == -1) {
+            printf("Failed to read request\n");
+        } else {
+            printf("%s\n\n", req);
+        }
+        free(req);
 
         if (!fork()) { // this is the child process
             close(sockfd); // child doesn't need the listener
