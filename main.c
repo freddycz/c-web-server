@@ -22,6 +22,16 @@
 #define BACKLOG 10   // how many pending connections queue will hold
 #define MIN_REQ_SIZE 500 //in bytes 
 
+#define MAX_METHOD_LEN 10
+#define MAX_PATH_LEN 1024
+#define MAX_PROTOCOL_LEN 9 
+
+struct http_request {
+    char method[MAX_METHOD_LEN];
+    char path[MAX_PATH_LEN];
+    char protocol[MAX_PROTOCOL_LEN];
+};
+
 void sigchld_handler(int s) {
     // waitpid() might overwrite errno, so we save and restore it:
     int saved_errno = errno;
@@ -86,6 +96,39 @@ int read_request(int fd, char **s, int *size) {
     if (trimmed_s != NULL) {
         *s = trimmed_s;
     }
+
+    return 0;
+}
+
+int parse_request(struct http_request *req,char *req_str, int size) {
+    int max_buf_size = MAX_METHOD_LEN + MAX_PATH_LEN + MAX_PROTOCOL_LEN;
+    char buf[max_buf_size];
+
+    int i, buf_size;
+
+    for (i = 0; i < size && i < max_buf_size-1; i++) {
+        if (req_str[i] == '\n') {
+            break;
+        }
+        buf[i] = req_str[i];
+    }
+    buf_size = i;
+
+    if (buf[buf_size-1] == '\r') {
+        buf[buf_size-1] = '\0';
+    } else {
+        buf[buf_size] = '\0';
+    }
+
+    char *method = strtok(buf, " ");
+    char *path = strtok(NULL, " ");
+    char *protocol = strtok(NULL, " ");
+
+    if (!method || !path || !protocol) return -1;
+
+    strncpy(req->method, method, MAX_METHOD_LEN-1);
+    strncpy(req->path, path, MAX_PATH_LEN-1);
+    strncpy(req->protocol, protocol, MAX_PROTOCOL_LEN-1);
 
     return 0;
 }
@@ -167,17 +210,20 @@ int main(void) {
         inet_ntop(their_addr.ss_family,get_in_addr((struct sockaddr *)&their_addr),
             s, sizeof s);
         printf("server: got connection from %s\n", s);
-        char *req;
-        int req_size = MIN_REQ_SIZE;
-        if (read_request(new_fd, &req, &req_size) == -1) {
-            printf("Failed to read request\n");
-        } else {
-            printf("%s\n\n", req);
-        }
-        free(req);
 
         if (!fork()) { // this is the child process
             close(sockfd); // child doesn't need the listener
+            
+            char *req_s;
+            int req_size = MIN_REQ_SIZE;
+            if (read_request(new_fd, &req_s, &req_size) == -1) {
+                printf("Failed to read request\n");
+            } else {
+                struct http_request req;
+                parse_request(&req, req_s, req_size);
+            }
+            free(req_s);
+            
             char *text = "HTTP/1.0 200 OK\nContent-Length: 122\nContent-Type: text/html; charset=utf-8\n\n";
             if (send(new_fd, text, strlen(text), 0) == -1)
                 perror("send");
