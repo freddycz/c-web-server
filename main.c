@@ -91,12 +91,6 @@ int read_request(int fd, char **s, int *size) {
 
         received += got;
         *((*s)+received) = '\0';
-
-
-
-        if (received >= 4 && strcmp(*s+received-4, "\r\n\r\n") == 0) {
-            break;
-        }
     }
 
     *size = received + 1;
