@@ -32,6 +32,8 @@
 #define MAX_PATH_LEN 1024
 #define MAX_PROTOCOL_LEN 9 
 
+char *target_folder = "web";
+
 struct http_request {
     char method[MAX_METHOD_LEN];
     char path[MAX_PATH_LEN];
@@ -210,8 +212,14 @@ void handle_request(int fd) {
     }
 
     if (strcmp(req.method, "GET") == 0) {
+        int path_len = strlen(target_folder) + strlen(req.path);
+        char path[path_len+1];
+        strcpy(path, target_folder);
+        strcat(path, req.path);
+
+
         int file_len = 0;
-        char *f = get_file("web/index.html", &file_len);
+        char *f = get_file(path, &file_len);
 
         if (f == NULL) {
             char *not_found = "HTTP/1.0 404 Not Found";
@@ -220,7 +228,7 @@ void handle_request(int fd) {
             return;
         }
 
-        char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8";
+        char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8\n";
         char content_len_header[MAX_FILE_SIZE+19] = "Content-Length: ";
 
         int dec_places = (int) log10((double) file_len)+1;
