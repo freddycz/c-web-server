@@ -229,14 +229,12 @@ void handle_request(int fd) {
         sprintf(len_string, "%d", file_len);
         strcat(content_len_header, len_string);
         strcat(content_len_header, "\n\n");
-        printf("%s\n", content_len_header);
 
 
         if (send(fd, content_len_header, strlen(content_len_header), 0) == -1)
             perror("send");
         if (send(fd, f, file_len, 0) == -1)
             perror("send");
-        printf("%s\n", f);
         free(f);
     } else {
         send_error(fd, 501);
