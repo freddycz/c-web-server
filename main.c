@@ -5,7 +5,9 @@
 #include <asm-generic/socket.h>
 #include <errno.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
+#include <strings.h>
 #include <sys/poll.h>
 #include <time.h>
 #include <unistd.h>
@@ -24,6 +26,7 @@
 
 #define BACKLOG 10   // how many pending connections queue will hold
 #define MIN_REQ_SIZE 500 //in bytes 
+#define MAX_FILE_SIZE 10 //in decimal places
 
 #define MAX_METHOD_LEN 10
 #define MAX_PATH_LEN 1024
@@ -147,6 +150,51 @@ void send_error(int fd, int err) {
     }
 }
 
+char *get_file(char *path, long *file_len) {
+    char *buf = NULL;
+    FILE *f = fopen(path, "rb");
+
+    if (f) {
+        if (fseek(f, 0, SEEK_END) != 0) {
+            return buf;
+        }
+        long len = ftell(f);
+
+        if (fseek(f, 0, SEEK_SET) != 0) {
+            return buf;
+        }
+
+        buf = malloc(len+1);
+        if (buf == NULL) {
+            return buf;
+        }
+
+        if (fread(buf, 1, len, f) != len) {
+            free(buf);
+            return NULL;
+        }
+        if (fclose(f) != 0) {
+            free(buf);
+            return NULL;
+        }
+        buf[len] = '\0';
+        *file_len = len;
+    }
+
+    return buf;
+}
+
+char *get_len_string(long len) {
+    int dec_places = (int) log((double) len);
+
+    printf("Decimal places %d\n", dec_places);
+
+    if (dec_places > MAX_FILE_SIZE) {
+        return NULL;
+    }
+    return NULL;
+}
+
 void handle_request(int fd) {
     char *req_str;
     int req_size = MIN_REQ_SIZE;
@@ -173,12 +221,24 @@ void handle_request(int fd) {
     }
 
     if (strcmp(req.method, "GET") == 0) {
-        char *text = "HTTP/1.0 200 OK\nContent-Length: 122\nContent-Type: text/html; charset=utf-8\n\n";
-        if (send(fd, text, strlen(text), 0) == -1)
+        get_len_string(1000);
+        char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8";
+        if (send(fd, head, strlen(head), 0) == -1)
             perror("send");
-        char *content = "<!DOCTYPE html><html><title>HTML Tutorial</title><body><h1>This is a heading</h1><p>This is a paragraph.</p></body></html>";
-        if (send(fd, content, strlen(content), 0) == -1)
+
+        long file_len = 0;
+        char *f = get_file("web/index.html", &file_len);
+        if (f == NULL) {
+            return;
+        }
+        char content_len_header[MAX_FILE_SIZE+19] = "Content-Length: ";
+
+        if (send(fd, content_len_header, strlen(content_len_header), 0) == -1)
             perror("send");
+        if (send(fd, f, file_len, 0) == -1)
+            perror("send");
+        printf("%s\n", f);
+        free(f);
     } else {
         send_error(fd, 501);
         printf("Method not supported\n");
