@@ -150,7 +150,7 @@ void send_error(int fd, int err) {
     }
 }
 
-char *get_file(char *path, long *file_len) {
+char *get_file(char *path, int *file_len) {
     char *buf = NULL;
     FILE *f = fopen(path, "rb");
 
@@ -178,21 +178,10 @@ char *get_file(char *path, long *file_len) {
             return NULL;
         }
         buf[len] = '\0';
-        *file_len = len;
+        *file_len = (int) len;
     }
 
     return buf;
-}
-
-char *get_len_string(long len) {
-    int dec_places = (int) log((double) len);
-
-    printf("Decimal places %d\n", dec_places);
-
-    if (dec_places > MAX_FILE_SIZE) {
-        return NULL;
-    }
-    return NULL;
 }
 
 void handle_request(int fd) {
@@ -221,17 +210,27 @@ void handle_request(int fd) {
     }
 
     if (strcmp(req.method, "GET") == 0) {
-        get_len_string(1000);
         char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8";
         if (send(fd, head, strlen(head), 0) == -1)
             perror("send");
 
-        long file_len = 0;
+        int file_len = 0;
         char *f = get_file("web/index.html", &file_len);
         if (f == NULL) {
             return;
         }
         char content_len_header[MAX_FILE_SIZE+19] = "Content-Length: ";
+
+        int dec_places = (int) log10((double) file_len)+1;
+        if (dec_places > MAX_FILE_SIZE) {
+            return;
+        }
+        char len_string[dec_places+1];
+        sprintf(len_string, "%d", file_len);
+        strcat(content_len_header, len_string);
+        strcat(content_len_header, "\n\n");
+        printf("%s\n", content_len_header);
+
 
         if (send(fd, content_len_header, strlen(content_len_header), 0) == -1)
             perror("send");
