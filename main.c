@@ -210,15 +210,17 @@ void handle_request(int fd) {
     }
 
     if (strcmp(req.method, "GET") == 0) {
-        char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8";
-        if (send(fd, head, strlen(head), 0) == -1)
-            perror("send");
-
         int file_len = 0;
         char *f = get_file("web/index.html", &file_len);
+
         if (f == NULL) {
+            char *not_found = "HTTP/1.0 404 Not Found";
+            if (send(fd, not_found, strlen(not_found), 0) == -1)
+                perror("send");
             return;
         }
+
+        char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8";
         char content_len_header[MAX_FILE_SIZE+19] = "Content-Length: ";
 
         int dec_places = (int) log10((double) file_len)+1;
@@ -231,6 +233,8 @@ void handle_request(int fd) {
         strcat(content_len_header, "\n\n");
 
 
+        if (send(fd, head, strlen(head), 0) == -1)
+            perror("send");
         if (send(fd, content_len_header, strlen(content_len_header), 0) == -1)
             perror("send");
         if (send(fd, f, file_len, 0) == -1)
