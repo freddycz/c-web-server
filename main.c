@@ -59,6 +59,17 @@ void *get_in_addr(struct sockaddr *sa) {
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+char *get_file_ext(char *path) {
+    char *p = NULL;
+
+    for (p = path; *p != '\0'; p++) {
+        if (*p == '.') {
+            return p+1;
+        }
+    }
+    return NULL;
+}
+
 int read_request(int fd, char **s, int *size) {
     int received = 0;
     *size = MIN_REQ_SIZE;
@@ -224,9 +235,9 @@ void handle_request(int fd) {
             strcat(path, "index.html");
         }
 
-
         int file_len = 0;
         char *f = get_file(path, &file_len);
+        
 
         if (f == NULL) {
             char *not_found = "HTTP/1.0 404 Not Found";
