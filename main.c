@@ -213,9 +213,16 @@ void handle_request(int fd) {
 
     if (strcmp(req.method, "GET") == 0) {
         int path_len = strlen(target_folder) + strlen(req.path);
+        int is_root = strcmp(req.path, "/");
+        if (is_root == 0) {
+            path_len += strlen("index.html");
+        }
         char path[path_len+1];
         strcpy(path, target_folder);
         strcat(path, req.path);
+        if (is_root == 0) {
+            strcat(path, "index.html");
+        }
 
 
         int file_len = 0;
