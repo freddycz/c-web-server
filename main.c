@@ -221,6 +221,7 @@ void handle_request(int fd) {
         send_error(fd, 400);
         return;
     }
+    printf("Request: %s %s\n", req.method, req.path);
 
     if (strcmp(req.method, "GET") == 0) {
         int path_len = strlen(target_folder) + strlen(req.path);
