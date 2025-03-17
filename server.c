@@ -52,6 +52,23 @@ void *get_in_addr(struct sockaddr *sa) {
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+int sendall(int soc, char *buf, int len) {
+    int sent = 0;        
+    int bytesleft = len;
+    int n;
+
+    while (sent < len) {
+        n = send(soc, buf+sent, bytesleft, 0);
+        if (n == -1) { 
+            break; 
+        }
+        sent += n;
+        bytesleft -= n;
+    }
+
+    return n==-1?-1:0; 
+} 
+
 int read_request(int fd, char **s, int *size) {
     int received = 0;
     *size = MIN_REQ_SIZE;
@@ -135,13 +152,13 @@ int parse_request(struct http_request *req,char *req_str, int size) {
 void send_error(int fd, int err) {
     if (err == 500) {
         char *interal_err = "HTTP/1.0 500 Internal Server Error";
-        send(fd, interal_err, strlen(interal_err), 0);
+        sendall(fd, interal_err, strlen(interal_err));
     } else if (err == 501) {
         char *not_implemented = "HTTP/1.0 501 Not Implemented";
-        send(fd, not_implemented, strlen(not_implemented), 0);
+        sendall(fd, not_implemented, strlen(not_implemented));
     } else if (err == 400) {
         char *bad_req = "HTTP/1.0 400 Bad Request";
-        send(fd, bad_req, strlen(bad_req), 0);
+        sendall(fd, bad_req, strlen(bad_req));
     }
 }
 
@@ -224,7 +241,7 @@ void handle_request(int fd) {
 
         if (f == NULL) {
             char *not_found = "HTTP/1.0 404 Not Found";
-            if (send(fd, not_found, strlen(not_found), 0) == -1)
+            if (sendall(fd, not_found, strlen(not_found)) == -1)
                 perror("send");
             return;
         }
@@ -242,11 +259,11 @@ void handle_request(int fd) {
         strcat(content_len_header, "\n\n");
 
 
-        if (send(fd, head, strlen(head), 0) == -1)
+        if (sendall(fd, head, strlen(head)) == -1)
             perror("send");
-        if (send(fd, content_len_header, strlen(content_len_header), 0) == -1)
+        if (sendall(fd, content_len_header, strlen(content_len_header)) == -1)
             perror("send");
-        if (send(fd, f, file_len, 0) == -1)
+        if (sendall(fd, f, file_len) == -1)
             perror("send");
         free(f);
     } else {
