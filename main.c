@@ -59,17 +59,6 @@ void *get_in_addr(struct sockaddr *sa) {
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-char *get_file_ext(char *path) {
-    char *p = NULL;
-
-    for (p = path; *p != '\0'; p++) {
-        if (*p == '.') {
-            return p+1;
-        }
-    }
-    return NULL;
-}
-
 int read_request(int fd, char **s, int *size) {
     int received = 0;
     *size = MIN_REQ_SIZE;
@@ -247,7 +236,7 @@ void handle_request(int fd) {
             return;
         }
 
-        char *head = "HTTP/1.0 200 OK\nContent-Type: text/html; charset=utf-8\n";
+        char *head = "HTTP/1.0 200 OK\n";
         char content_len_header[MAX_FILE_SIZE+19] = "Content-Length: ";
 
         int dec_places = (int) log10((double) file_len)+1;
