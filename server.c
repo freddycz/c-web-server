@@ -69,6 +69,17 @@ int sendall(int soc, char *buf, int len) {
     return n==-1?-1:0; 
 } 
 
+char *get_file_ext(char *path) {
+    char *p = NULL;
+
+    for (p = path; *p != '\0'; p++) {
+        if (*p == '.') {
+            return p+1;
+        }
+    }
+    return NULL;
+}
+
 int read_request(int fd, char **s, int *size) {
     int received = 0;
     *size = MIN_REQ_SIZE;
@@ -258,9 +269,15 @@ void handle_request(int fd) {
         strcat(content_len_header, len_string);
         strcat(content_len_header, "\n\n");
 
+        char *file_ext = get_file_ext(path);
 
         if (sendall(fd, head, strlen(head)) == -1)
             perror("send");
+        if (strcmp(file_ext, "svg") == 0) {
+            char *content_type = "Content-Type: image/svg+xml; charset=utf-8\n";
+            if (sendall(fd, content_type, strlen(content_type)) == -1)
+                perror("send");
+        }
         if (sendall(fd, content_len_header, strlen(content_len_header)) == -1)
             perror("send");
         if (sendall(fd, f, file_len) == -1)
